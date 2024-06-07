@@ -109,14 +109,15 @@ func handleMessages() {
         case client := <-unregister:
             if _, ok := clients[client]; ok {
                 if matchedClient, exists := matches[client.ID]; exists {
-                    delete(matches, matchedClient.ID)  // Clean up the match
+                    delete(matches, matchedClient.ID)
                     delete(matches, client.ID)
+                    // Find a new match for the remaining client
+                    tryMatch(matchedClient)
                 }
                 client.Conn.Close()
                 delete(clients, client)
                 fmt.Println("Client Left:", client.ID)
             }
-
         }
     }
 }
