@@ -4,6 +4,9 @@ import (
     "fmt"
     "net/http"
     "github.com/gorilla/websocket"
+    "github.com/robfig/cron/v3"
+    "log"
+    "time"
 )
 
 type Client struct {
@@ -24,7 +27,6 @@ var matches = make(map[string]*Client)
 var register = make(chan *Client)
 var unregister = make(chan *Client)
 
-
 var upgrader = websocket.Upgrader{
     CheckOrigin: func(r *http.Request) bool {
         return true
@@ -34,6 +36,11 @@ var upgrader = websocket.Upgrader{
 func main() {
     http.HandleFunc("/ws", handleConnections)
     go handleMessages()
+
+    // Setup cron job
+    c := cron.New()
+    c.AddFunc("*/14 * * * *", callBackend)
+    c.Start()
 
     err := http.ListenAndServe(":8080", nil)
     if err != nil {
@@ -68,7 +75,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
             tryMatch(client)
         case "message":
             if partner, ok := matches[client.ID]; ok {
-                partner.Conn.WriteJSON(msg)  // Forward the message to the matched partner
+                partner.Conn.WriteJSON(msg)  
             }
         }
     }
@@ -111,7 +118,6 @@ func handleMessages() {
                 if matchedClient, exists := matches[client.ID]; exists {
                     delete(matches, matchedClient.ID)
                     delete(matches, client.ID)
-                    // Find a new match for the remaining client
                     tryMatch(matchedClient)
                 }
                 client.Conn.Close()
@@ -119,5 +125,20 @@ func handleMessages() {
                 fmt.Println("Client Left:", client.ID)
             }
         }
+    }
+}
+
+func callBackend() {
+    resp, err := http.Get("https://ws-golang-8s00.onrender.com")
+    if err != nil {
+        log.Println("Error calling backend:", err)
+        return
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        log.Println("Non-OK HTTP status:", resp.StatusCode)
+    } else {
+        log.Println("Backend called successfully at", time.Now())
     }
 }
